@@ -26,6 +26,6 @@ public class YawAction extends AbstractInputAction {
     if (isGamePad && val > 0)
       direction = -1;
 
-    game.dol.yaw(speed * (float)game.deltaTime * direction); 
+    game.dol.yaw(speed * (float)time * direction); 
   }
 }

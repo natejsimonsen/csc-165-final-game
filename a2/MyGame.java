@@ -1,6 +1,5 @@
 package a2;
 
-import a2.CameraOrbit3D;
 import a2.ManualFridge;
 import a2.YawAction;
 import java.awt.*;
@@ -17,16 +16,19 @@ public class MyGame extends VariableFrameRateGame {
 
   private static Engine engine;
   protected boolean lost = false;
+  protected int score = 0;
   protected boolean won = false;
-  protected double lastFrameTime, currFrameTime, deltaTime;
+  protected double lastFrameTime, currFrameTime, deltaTime, elapsedTime;
   protected double speed = 4.5;
   protected GameObject dol, xAxis, yAxis, zAxis, ground;
-  protected ObjShape dolS, xLine, yLine, zLine, plane;
-  protected TextureImage dolTex, moonTex;
+  protected ObjShape dolS, xLine, yLine, zLine;
+  protected TextureImage dolTex, moonTex, checkeredTex, skyTex, trianglesTex, magnetTex;
   protected Light light1;
   protected Camera cam, rightCamera;
-  protected GameObject[] magnets;
+  protected GameObject[] magnets = new GameObject[4];
+  protected GameObject[] sites = new GameObject[4];
   protected CameraOrbit3D camCtrl;
+  protected InputManager im;
 
   public MyGame() {
     super();
@@ -54,12 +56,20 @@ public class MyGame extends VariableFrameRateGame {
     rightCamera.setN(new Vector3f(0, -1, 0));
   }
 
+  public void displayHUD() {
+    HUDmanager hm = engine.getHUDmanager();
+    Viewport main = engine.getRenderSystem().getViewport("MAIN");
+    Viewport right = engine.getRenderSystem().getViewport("RIGHT");
+
+    hm.setHUD1("Score: " + score, new Vector3f(255, 255, 255), 10, (int)main.getActualHeight() - 30);
+    hm.setHUD2(dol.getWorldLocation().toString(), new Vector3f(255, 255, 255), (int)right.getActualLeft() + 10, (int)right.getActualHeight() - 30);
+  }
+
   @Override
   public void loadShapes() {
     xLine = new Line(new Vector3f(0, 0, 0), new Vector3f(5, 0, 0));
     yLine = new Line(new Vector3f(0, 0, 0), new Vector3f(0, 5, 0));
     zLine = new Line(new Vector3f(0, 0, 0), new Vector3f(0, 0, 5));
-    plane = new Plane();
     dolS = new ImportedModel("dolphinHighPoly.obj");
   }
 
@@ -67,6 +77,10 @@ public class MyGame extends VariableFrameRateGame {
   public void loadTextures() {
     dolTex = new TextureImage("Dolphin_HighPolyUV.png");
     moonTex = new TextureImage("moon.jpg");
+    skyTex = new TextureImage("sky.jpg");
+    trianglesTex = new TextureImage("triangles.png");
+    checkeredTex = new TextureImage("checkered.png");
+    magnetTex = new TextureImage("magnet.png");
   }
 
   @Override
@@ -87,11 +101,54 @@ public class MyGame extends VariableFrameRateGame {
     dol.setLocalTranslation(initialTranslation);
     dol.setLocalScale(initialScale);
 
-    ground = new GameObject(GameObject.root(), plane, moonTex);
+    ground = new GameObject(GameObject.root(), new Plane(), moonTex);
     initialTranslation = (new Matrix4f()).translation(0, -1, 0);
     initialScale = (new Matrix4f()).scaling(30.0f);
     ground.setLocalTranslation(initialTranslation);
     ground.setLocalScale(initialScale);
+    
+    GameObject torus1 = new GameObject(GameObject.root(), new Torus(), skyTex);
+    initialTranslation = (new Matrix4f()).translation(10, 0.5f, 25);
+    initialScale = (new Matrix4f()).scaling(2.0f);
+    torus1.setLocalTranslation(initialTranslation);
+    torus1.setLocalScale(initialScale);
+    
+    GameObject torus2 = new GameObject(GameObject.root(), new Torus(), trianglesTex);
+    initialTranslation = (new Matrix4f()).translation(-10, 0.5f, 25);
+    initialScale = (new Matrix4f()).scaling(2.0f);
+    torus2.setLocalTranslation(initialTranslation);
+    torus2.setLocalScale(initialScale);
+
+    GameObject cube1 = new GameObject(GameObject.root(), new Cube(), checkeredTex);
+    initialTranslation = (new Matrix4f()).translation(10, 0.5f, -25);
+    initialScale = (new Matrix4f()).scaling(1.5f);
+    cube1.setLocalTranslation(initialTranslation);
+    cube1.setLocalScale(initialScale);
+
+    GameObject cube2 = new GameObject(GameObject.root(), new Cube(), magnetTex);
+    initialTranslation = (new Matrix4f()).translation(-10, 0.5f, -25);
+    initialScale = (new Matrix4f()).scaling(1.5f);
+    cube2.setLocalTranslation(initialTranslation);
+    cube2.setLocalScale(initialScale);
+
+    sites[0] = torus1;
+    sites[1] = torus2;
+    sites[2] = cube1;
+    sites[3] = cube2;
+
+    for (int i = 0; i < magnets.length; i++) {
+      GameObject magnet = new GameObject(dol, new Cube(), magnetTex);
+      float sepFactor = 0.35f;
+      initialTranslation = (new Matrix4f()).translation(1f + (float)Math.floor(i / 2) * sepFactor, 0.25f, 0.25f + (i % 2) * sepFactor);
+      initialScale = (new Matrix4f()).scaling(.05f);
+      magnet.setLocalTranslation(initialTranslation);
+      magnet.setLocalScale(initialScale);
+      magnet.propagateTranslation(true);
+      magnet.applyParentRotationToPosition(true);
+      magnet.propagateRotation(true);
+      magnet.getRenderStates().disableRendering();
+      magnets[i] = magnet;
+    }
   }
 
   @Override
@@ -111,7 +168,7 @@ public class MyGame extends VariableFrameRateGame {
     setupActions();
   }
 
-  private void toggleAxisLines() {
+  public void toggleAxisLines() {
     RenderStates x = xAxis.getRenderStates();
     RenderStates y = yAxis.getRenderStates();
     RenderStates z = zAxis.getRenderStates();
@@ -137,7 +194,7 @@ public class MyGame extends VariableFrameRateGame {
   }
 
   private void setupActions() {
-    InputManager im = engine.getInputManager();
+    im = engine.getInputManager();
 
     // yaw the dolphin
     YawAction yawRight = new YawAction(this, -speed / 2, false);
@@ -160,8 +217,9 @@ public class MyGame extends VariableFrameRateGame {
     );
 
     // move the dolphin
-    MoveAction moveForward = new MoveAction(this, speed);
-    MoveAction moveBackward = new MoveAction(this, -speed);
+    MoveAction moveForward = new MoveAction(this, speed * 4, false);
+    MoveAction moveBackward = new MoveAction(this, -speed * 4, false);
+    MoveAction moveGamepad = new MoveAction(this, speed * 4, true);
     im.associateActionWithAllKeyboards(
       net.java.games.input.Component.Identifier.Key.W,
       moveForward,
@@ -174,8 +232,15 @@ public class MyGame extends VariableFrameRateGame {
     );
     im.associateActionWithAllGamepads(
       net.java.games.input.Component.Identifier.Axis.Y,
-      moveForward,
+      moveGamepad,
       InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN
+    );
+    
+    AxisAction toggleAxisAction = new AxisAction(this);
+    im.associateActionWithAllGamepads(
+      net.java.games.input.Component.Identifier.Button._3,
+      toggleAxisAction,
+      InputManager.INPUT_ACTION_TYPE.ON_PRESS_ONLY
     );
 
     setupRightCameraActions(im);
@@ -186,6 +251,7 @@ public class MyGame extends VariableFrameRateGame {
     PanAction panRight = new PanAction(rightCamera, "right");
     PanAction panUp = new PanAction(rightCamera, "up");
     PanAction panDown = new PanAction(rightCamera, "down");
+    PanAction panPad = new PanAction(rightCamera, "pad");
     im.associateActionWithAllKeyboards(
       net.java.games.input.Component.Identifier.Key.J,
       panLeft,
@@ -206,6 +272,12 @@ public class MyGame extends VariableFrameRateGame {
       panDown,
       InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN
     );
+    im.associateActionWithAllGamepads(
+      net.java.games.input.Component.Identifier.Axis.POV,
+      panPad,
+      InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN
+    );
+
 
     ZoomAction zoomIn = new ZoomAction(rightCamera, -1);
     ZoomAction zoomOut = new ZoomAction(rightCamera, 1);
@@ -216,6 +288,16 @@ public class MyGame extends VariableFrameRateGame {
     );
     im.associateActionWithAllKeyboards(
       net.java.games.input.Component.Identifier.Key._9,
+      zoomOut,
+      InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN
+    );
+    im.associateActionWithAllGamepads(
+      net.java.games.input.Component.Identifier.Button._4,
+      zoomIn,
+      InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN
+    );
+    im.associateActionWithAllGamepads(
+      net.java.games.input.Component.Identifier.Button._5,
       zoomOut,
       InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN
     );
@@ -232,15 +314,33 @@ public class MyGame extends VariableFrameRateGame {
 
   @Override
   public void update() {
-    engine.getInputManager().update((float) deltaTime);
     setTimes();
+    im.update((float) deltaTime);
     camCtrl.updateCameraPosition();
+    checkDolphinScored();
+    displayHUD();
+  }
+
+  private void checkDolphinScored() {
+    int remove = -1;
+    for (int i = 0; i < sites.length; i++) {
+      if (sites[i] == null) continue;
+      if (dol.getWorldLocation().distance(sites[i].getWorldLocation()) < 2) {
+        magnets[i].getRenderStates().enableRendering();
+        remove = i;
+        score++;
+      }
+    }
+
+    if (remove != -1)
+      sites[remove] = null;
   }
 
   public void setTimes() {
     lastFrameTime = currFrameTime;
     currFrameTime = System.currentTimeMillis();
     deltaTime = (currFrameTime - lastFrameTime) / 1000.0;
+    elapsedTime += deltaTime;
   }
 
   public void moveDolphin(float speed) {
