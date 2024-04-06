@@ -4,10 +4,19 @@ import java.util.UUID;
 
 import tage.networking.server.GameConnectionServer;
 import tage.networking.server.IClientInfo;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 
 public class GameServerUDP extends GameConnectionServer<UUID> {
   public GameServerUDP(int localPort) throws IOException {
     super(localPort, ProtocolType.UDP);
+    try {
+      InetAddress ip = InetAddress.getLocalHost();
+      System.out.println("Local IP Address: " + ip.getHostAddress());
+    } catch (UnknownHostException e) {
+      System.out.println("Unable to get local IP address");
+      e.printStackTrace();
+    }
   }
 
   @Override
@@ -15,8 +24,9 @@ public class GameServerUDP extends GameConnectionServer<UUID> {
     String message = (String) o;
     String[] messageTokens = message.split(",");
 
-    if (messageTokens.length > 0) { // JOIN -- Case where client just joined the server
-                                    // Received Message Format: (join,localId)
+    if (messageTokens.length > 0) {
+      // JOIN -- Case where client just joined the server
+      // Received Message Format: (join,localId)
       if (messageTokens[0].compareTo("join") == 0) {
         try {
           IClientInfo ci;
@@ -41,11 +51,18 @@ public class GameServerUDP extends GameConnectionServer<UUID> {
 
       // CREATE -- Case where server receives a create message (to specify avatar
       // location)
-      // Received Message Format: (create,localId,x,y,z)
+      // Received Message Format: (create,localId,x,y,z,avatarName,textureName)
       if (messageTokens[0].compareTo("create") == 0) {
         UUID clientID = UUID.fromString(messageTokens[1]);
         String[] pos = { messageTokens[2], messageTokens[3], messageTokens[4] };
-        sendCreateMessages(clientID, pos);
+        String avatarName = "";
+        String textureName = "";
+        if (messageTokens.length > 5)
+          avatarName = messageTokens[5];
+        if (messageTokens.length > 6)
+          textureName = messageTokens[6];
+
+        sendCreateMessages(clientID, pos, avatarName, textureName);
         sendWantsDetailsMessages(clientID);
       }
 
@@ -111,27 +128,31 @@ public class GameServerUDP extends GameConnectionServer<UUID> {
   // server. This message also triggers WANTS_DETAILS messages to be sent to all
   // client
   // connected to the server.
-  // Message Format: (create,remoteId,x,y,z) where x, y, and z represent the
-  // position
+  // Message Format: (create,remoteId,x,y,z,avatarName,textureName) where x, y,
+  // and z represent the
+  // position and avatarName specifies an .obj file and textureName represent a
+  // textureName.jpg texture
 
-  public void sendCreateMessages(UUID clientID, String[] position) {
+  public void sendCreateMessages(UUID clientID, String[] position, String avatarName, String textureName) {
     try {
       String message = new String("create," + clientID.toString());
       message += "," + position[0];
       message += "," + position[1];
       message += "," + position[2];
+      message += "," + avatarName;
+      message += "," + textureName;
       forwardPacketToAll(message, clientID);
     } catch (IOException e) {
       e.printStackTrace();
     }
   }
 
-  // Informs a client of the details for a remote client’s avatar. This message is
+  // Informs a client of the details for a remote client's avatar. This message is
   // in response
   // to the server receiving a DETAILS_FOR message from a remote client. That
-  // remote client’s
-  // message’s localId becomes the remoteId for this message, and the remote
-  // client’s message’s
+  // remote client's
+  // message's localId becomes the remoteId for this message, and the remote
+  // client's message's
   // remoteId is used to send this message to the proper client.
   // Message Format: (dsfr,remoteId,x,y,z) where x, y, and z represent the
   // position.
@@ -148,7 +169,7 @@ public class GameServerUDP extends GameConnectionServer<UUID> {
     }
   }
 
-  // Informs a local client that a remote client wants the local client’s avatar’s
+  // Informs a local client that a remote client wants the local client's avatar's
   // information.
   // This message is meant to be sent to all clients connected to the server when
   // a new client
@@ -164,7 +185,7 @@ public class GameServerUDP extends GameConnectionServer<UUID> {
     }
   }
 
-  // Informs a client that a remote client’s avatar has changed position. x, y,
+  // Informs a client that a remote client's avatar has changed position. x, y,
   // and z represent
   // the new position of the remote avatar. This message is meant to be forwarded
   // to all clients
