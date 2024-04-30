@@ -25,26 +25,32 @@ import tage.networking.IGameConnection.ProtocolType;
 
 public class MyGame extends VariableFrameRateGame {
   private static Engine engine;
+  private boolean touched;
   private InputManager im;
   private GhostManager gm;
+  private String avatarName = "guy";
+  private String textureName = "guy_2";
 
   private int counter = 0;
   private Vector3f currentPosition;
   private Matrix4f initialTranslation, initialRotation, initialScale;
-  private double startTime, prevTime, elapsedTime, amt;
+  private double lastFrameTime, currFrameTime, deltaTime, elapsedTime = 0;
 
-  private GameObject tor, avatar, x, y, z;
-  private ObjShape torS, dolS, linxS, linyS, linzS;
-  private TextureImage doltx;
+  private GameObject terr, avatar, x, y, z;
+  private ObjShape terrS, linxS, linyS, linzS;
+  private TextureImage hills, brick;
   private Light light;
   private HashMap<String, TextureImage> playerTextures;
   private HashMap<String, ObjShape> playerShapes;
+  private CameraOrbit3D camCtrl;
+  private Camera cam;
 
   private String serverAddress;
   private int serverPort;
   private ProtocolType serverProtocol;
   private ProtocolClient protClient;
   private boolean isClientConnected = false;
+  private int sky;
 
   public MyGame(String serverAddress, int serverPort, String protocol) {
     super();
@@ -64,12 +70,13 @@ public class MyGame extends VariableFrameRateGame {
   @Override
   public void loadShapes() {
     playerShapes = new HashMap<>();
-    torS = new Torus(0.5f, 0.2f, 48);
-    dolS = new ImportedModel("dolphinHighPoly.obj");
+    terrS = new TerrainPlane(1000);
     linxS = new Line(new Vector3f(0f, 0f, 0f), new Vector3f(3f, 0f, 0f));
     linyS = new Line(new Vector3f(0f, 0f, 0f), new Vector3f(0f, 3f, 0f));
     linzS = new Line(new Vector3f(0f, 0f, 0f), new Vector3f(0f, 0f, -3f));
     playerShapes.put("dolphin", new ImportedModel("dolphinHighPoly.obj"));
+    playerShapes.put("guy", new ImportedModel("avatar.obj"));
+    playerShapes.put("bucket", new ImportedModel("cylinder.obj"));
   }
 
   @Override
@@ -77,26 +84,42 @@ public class MyGame extends VariableFrameRateGame {
     playerTextures = new HashMap<>();
     playerTextures.put("dolphin_normal", new TextureImage("Dolphin_HighPolyUV.png"));
     playerTextures.put("dolphin_red", new TextureImage("redDolphin.jpg"));
-    doltx = new TextureImage("Dolphin_HighPolyUV.png");
+    playerTextures.put("bucket", new TextureImage("Cylinder.png"));
+    playerTextures.put("guy", new TextureImage("guy_2.png"));
+    hills = new TextureImage("hills.jpg");
+    brick = new TextureImage("brick1.jpg");
+  }
+
+  @Override
+  public void loadSkyBoxes() {
+    sky = (engine.getSceneGraph()).loadCubeMap("sky");
+    (engine.getSceneGraph()).setActiveSkyBoxTexture(sky);
+    (engine.getSceneGraph()).setSkyBoxEnabled(true);
   }
 
   @Override
   public void buildObjects() {
     Matrix4f initialTranslation, initialRotation, initialScale;
 
-    // build dolphin avatar
-    avatar = new GameObject(GameObject.root(), dolS, doltx);
+    // build avatar
+    avatar = new GameObject(GameObject.root(), playerShapes.get(avatarName), playerTextures.get(textureName));
     initialTranslation = (new Matrix4f()).translation(-1f, 0f, 1f);
     avatar.setLocalTranslation(initialTranslation);
     initialRotation = (new Matrix4f()).rotationY((float) java.lang.Math.toRadians(135.0f));
     avatar.setLocalRotation(initialRotation);
-
-    // build torus along X axis
-    tor = new GameObject(GameObject.root(), torS);
-    initialTranslation = (new Matrix4f()).translation(1, 0, 0);
-    tor.setLocalTranslation(initialTranslation);
     initialScale = (new Matrix4f()).scaling(0.25f);
-    tor.setLocalScale(initialScale);
+    avatar.setLocalScale(initialScale);
+
+    // build terrain object
+    terr = new GameObject(GameObject.root(), terrS, brick);
+    initialTranslation = (new Matrix4f()).translation(0f, 0f, 0f);
+    terr.setLocalTranslation(initialTranslation);
+    initialScale = (new Matrix4f()).scaling(200.0f, 5.0f, 200.0f);
+    terr.setLocalScale(initialScale);
+    terr.setHeightMap(hills);
+    // set tiling for terrain texture
+    terr.getRenderStates().setTiling(1);
+    terr.getRenderStates().setTileFactor(200);
 
     // add X,Y,Z axes
     x = new GameObject(GameObject.root(), linxS);
@@ -105,6 +128,13 @@ public class MyGame extends VariableFrameRateGame {
     (x.getRenderStates()).setColor(new Vector3f(1f, 0f, 0f));
     (y.getRenderStates()).setColor(new Vector3f(0f, 1f, 0f));
     (z.getRenderStates()).setColor(new Vector3f(0f, 0f, 1f));
+  }
+
+  private void setupMainCamera() {
+    cam = engine.getRenderSystem().getViewport("MAIN").getCamera();
+    camCtrl = new CameraOrbit3D(cam, avatar, engine);
+    camCtrl.setElevationMin(2f);
+    camCtrl.setRadius(5f);
   }
 
   @Override
@@ -118,21 +148,16 @@ public class MyGame extends VariableFrameRateGame {
 
   @Override
   public void initializeGame() {
-    prevTime = System.currentTimeMillis();
-    startTime = System.currentTimeMillis();
     (engine.getRenderSystem()).setWindowDimensions(1900, 1000);
+    setupMainCamera();
+    lastFrameTime = System.currentTimeMillis();
+    currFrameTime = System.currentTimeMillis();
 
-    // ----------------- initialize camera ----------------
-    positionCameraBehindAvatar();
-
-    // ----------------- INPUTS SECTION -----------------------------
     im = engine.getInputManager();
 
-    // build some action objects for doing things in response to user input
     FwdAction fwdAction = new FwdAction(this, protClient);
     TurnAction turnAction = new TurnAction(this);
 
-    // attach the action objects to keyboard and gamepad components
     im.associateActionWithAllGamepads(
         net.java.games.input.Component.Identifier.Button._1,
         fwdAction, InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN);
@@ -155,49 +180,35 @@ public class MyGame extends VariableFrameRateGame {
     return playerTextures.get(texture);
   }
 
+  public void setTimes() {
+    lastFrameTime = currFrameTime;
+    currFrameTime = System.currentTimeMillis();
+    deltaTime = (currFrameTime - lastFrameTime) / 1000.0;
+    elapsedTime += deltaTime;
+  }
+
   @Override
   public void update() {
-    elapsedTime = System.currentTimeMillis() - prevTime;
-    prevTime = System.currentTimeMillis();
-    amt = elapsedTime * 0.03;
-    Camera c = (engine.getRenderSystem()).getViewport("MAIN").getCamera();
+    setTimes();
 
     // build and set HUD
-    int elapsTimeSec = Math.round((float) (System.currentTimeMillis() - startTime) / 1000.0f);
-    String elapsTimeStr = Integer.toString(elapsTimeSec);
-    String counterStr = Integer.toString(counter);
-    String dispStr1 = "Time = " + elapsTimeStr;
     String dispStr2 = "camera position = "
-        + (c.getLocation()).x()
-        + ", " + (c.getLocation()).y()
-        + ", " + (c.getLocation()).z();
-    Vector3f hud1Color = new Vector3f(1, 0, 0);
+        + (cam.getLocation()).x()
+        + ", " + (cam.getLocation()).y()
+        + ", " + (cam.getLocation()).z();
     Vector3f hud2Color = new Vector3f(1, 1, 1);
-    (engine.getHUDmanager()).setHUD1(dispStr1, hud1Color, 15, 15);
     (engine.getHUDmanager()).setHUD2(dispStr2, hud2Color, 500, 15);
 
     // update inputs and camera
-    im.update((float) elapsedTime);
-    positionCameraBehindAvatar();
-    processNetworking((float) elapsedTime);
-  }
+    im.update((float) deltaTime);
+    camCtrl.updateCameraPosition();
 
-  private void positionCameraBehindAvatar() {
-    Vector4f u = new Vector4f(-1f, 0f, 0f, 1f);
-    Vector4f v = new Vector4f(0f, 1f, 0f, 1f);
-    Vector4f n = new Vector4f(0f, 0f, 1f, 1f);
-    u.mul(avatar.getWorldRotation());
-    v.mul(avatar.getWorldRotation());
-    n.mul(avatar.getWorldRotation());
-    Matrix4f w = avatar.getWorldTranslation();
-    Vector3f position = new Vector3f(w.m30(), w.m31(), w.m32());
-    position.add(-n.x() * 2f, -n.y() * 2f, -n.z() * 2f);
-    position.add(v.x() * .75f, v.y() * .75f, v.z() * .75f);
-    Camera c = (engine.getRenderSystem()).getViewport("MAIN").getCamera();
-    c.setLocation(position);
-    c.setU(new Vector3f(u.x(), u.y(), u.z()));
-    c.setV(new Vector3f(v.x(), v.y(), v.z()));
-    c.setN(new Vector3f(n.x(), n.y(), n.z()));
+    // update dolphin height
+    Vector3f loc = avatar.getWorldLocation();
+    float height = terr.getHeight(loc.x(), loc.z());
+    avatar.setLocalLocation(new Vector3f(loc.x(), height + 1f, loc.z()));
+
+    processNetworking((float) elapsedTime);
   }
 
   @Override
@@ -207,7 +218,7 @@ public class MyGame extends VariableFrameRateGame {
         Vector3f oldPosition = avatar.getWorldLocation();
         Vector4f fwdDirection = new Vector4f(0f, 0f, 1f, 1f);
         fwdDirection.mul(avatar.getWorldRotation());
-        fwdDirection.mul(0.15f);
+        fwdDirection.mul(0.55f);
         Vector3f newPosition = oldPosition.add(fwdDirection.x(), fwdDirection.y(), fwdDirection.z());
         avatar.setLocalLocation(newPosition);
         protClient.sendMoveMessage(avatar.getWorldLocation());
@@ -263,11 +274,11 @@ public class MyGame extends VariableFrameRateGame {
   }
 
   public String getAvatarName() {
-    return "dolphin";
+    return avatarName;
   }
 
   public String getTextureName() {
-    return "dolphin_red";
+    return textureName;
   }
 
   public void setIsConnected(boolean value) {
