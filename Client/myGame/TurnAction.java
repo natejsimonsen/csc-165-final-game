@@ -18,37 +18,20 @@ public class TurnAction extends AbstractInputAction {
   }
 
   @Override
-  public void performAction(float time, net.java.games.input.Event evt) {
-    PhysicsObject avatarPhysics = game.getAvatar().getPhysicsObject();
+  public void performAction(float time, Event e) {
+    float keyValue = e.getValue();
+    if (keyValue > -.2 && keyValue < .2)
+      return; // deadzone
 
-    if (avatarPhysics != null && avatarPhysics.isDynamic()) {
-      float angularSpeed = -90.0f * time; 
-      Vector3f angularVelocity = new Vector3f(0, angularSpeed, 0); 
-
-      if (evt.getComponent().getIdentifier().equals(net.java.games.input.Component.Identifier.Key.A)) {
-        angularVelocity.y = -angularVelocity.y;
-      }
-
-      avatarPhysics.setAngularVelocity(new float[] {
-          angularVelocity.x,
-          angularVelocity.y,
-          angularVelocity.z
-      });
-    }
+    av = game.getAvatar();
+    oldRotation = new Matrix4f(av.getWorldRotation());
+    oldUp = new Vector4f(0f, 1f, 0f, 1f).mul(oldRotation);
+    float rot = -2f * time;
+    if (e.getComponent().getIdentifier().equals(net.java.games.input.Component.Identifier.Key.A))
+      rot *= -1;
+    rotAroundAvatarUp = new Matrix4f().rotation(rot, new Vector3f(oldUp.x(), oldUp.y(), oldUp.z()));
+    newRotation = oldRotation;
+    newRotation.mul(rotAroundAvatarUp);
+    av.setLocalRotation(newRotation);
   }
-
-  // @Override
-  // public void performAction(float time, Event e) {
-  //   float keyValue = e.getValue();
-  //   if (keyValue > -.2 && keyValue < .2)
-  //     return; // deadzone
-
-  //   av = game.getAvatar();
-  //   oldRotation = new Matrix4f(av.getWorldRotation());
-  //   oldUp = new Vector4f(0f, 1f, 0f, 1f).mul(oldRotation);
-  //   rotAroundAvatarUp = new Matrix4f().rotation(-2f * time, new Vector3f(oldUp.x(), oldUp.y(), oldUp.z()));
-  //   newRotation = oldRotation;
-  //   newRotation.mul(rotAroundAvatarUp);
-  //   av.setLocalRotation(newRotation);
-  // }
 }

@@ -172,6 +172,9 @@ public class MyGame extends VariableFrameRateGame {
     im.associateActionWithAllKeyboards(
         net.java.games.input.Component.Identifier.Key.W,
         fwdAction, InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN);
+    im.associateActionWithAllKeyboards(
+        net.java.games.input.Component.Identifier.Key.S,
+        fwdAction, InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN);
 
     im.associateActionWithAllKeyboards(
         net.java.games.input.Component.Identifier.Key.D,
@@ -252,8 +255,6 @@ public class MyGame extends VariableFrameRateGame {
   @Override
   public void update() {
     setTimes();
-    avatar.getPhysicsObject().setLinearVelocity(new float[] { 0, 0, 0 });
-    avatar.getPhysicsObject().setAngularVelocity(new float[] { 0, 0, 0 });
 
     // build and set HUD
     String dispStr2 = "camera position = "
@@ -267,20 +268,17 @@ public class MyGame extends VariableFrameRateGame {
     im.update((float) deltaTime);
     camCtrl.updateCameraPosition();
 
+    Vector3f loc = avatar.getWorldLocation();
+    float height = terr.getHeight(loc.x(), loc.z()) + 1.2f; // Adding 1f to adjust above terrain surface
+    Matrix4f currentTransform = new Matrix4f(avatar.getWorldRotation());
+    currentTransform.setTranslation(loc.x(), height, loc.z());
+    double[] transformArray = toDoubleArray(currentTransform.get(new float[16]));
+    avatar.setLocalTranslation(currentTransform);
+    avatar.getPhysicsObject().setTransform(transformArray);
 
     updatePhysics();
-
-    // Vector3f loc = avatar.getWorldLocation();
-    // float height = terr.getHeight(loc.x(), loc.z()) + 1.2f; // Adding 1f to adjust above terrain surface
-    // Matrix4f currentTransform = new Matrix4f(avatar.getWorldRotation());
-    // currentTransform.setTranslation(loc.x(), height, loc.z());
-    // double[] transformArray = toDoubleArray(currentTransform.get(new float[16]));
-    // avatar.setLocalTranslation(currentTransform);
-    // avatar.getPhysicsObject().setTransform(transformArray);
-
-    // updatePhysics();
     
-    // processNetworking((float) elapsedTime);
+    processNetworking((float) elapsedTime);
   }
 
   public GameObject getTerr() {
