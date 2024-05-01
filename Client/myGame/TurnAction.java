@@ -29,7 +29,7 @@ public class TurnAction extends AbstractInputAction {
     float rot = -2f * time;
     if (e.getComponent().getIdentifier().equals(net.java.games.input.Component.Identifier.Key.A))
       rot *= -1;
-    rotAroundAvatarUp = new Matrix4f().rotation(rot, new Vector3f(oldUp.x(), oldUp.y(), oldUp.z()));
+    rotAroundAvatarUp = new Matrix4f().rotation(rot, new Vector3f(0, 1, 0));
     newRotation = oldRotation;
     newRotation.mul(rotAroundAvatarUp);
     av.setLocalRotation(newRotation);

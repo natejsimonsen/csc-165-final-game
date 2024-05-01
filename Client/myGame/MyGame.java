@@ -200,7 +200,7 @@ public class MyGame extends VariableFrameRateGame {
     tempTransform = toDoubleArray(translation.get(vals));
     avatarP = (engine.getSceneGraph()).addPhysicsCapsuleX(
         mass, tempTransform, radius, height);
-    avatarP.setBounciness(0.8f);
+    avatarP.setBounciness(0.0f);
     avatar.setPhysicsObject(avatarP);
 
     engine.enableGraphicsWorldRender();
@@ -273,7 +273,6 @@ public class MyGame extends VariableFrameRateGame {
     Matrix4f currentTransform = new Matrix4f(avatar.getWorldRotation());
     currentTransform.setTranslation(loc.x(), height, loc.z());
     double[] transformArray = toDoubleArray(currentTransform.get(new float[16]));
-    avatar.setLocalTranslation(currentTransform);
     avatar.getPhysicsObject().setTransform(transformArray);
 
     updatePhysics();
@@ -290,6 +289,7 @@ public class MyGame extends VariableFrameRateGame {
     Matrix4f mat = new Matrix4f();
     Matrix4f mat2 = new Matrix4f().identity();
     Matrix4f mat3 = new Matrix4f().identity();
+
     checkForCollisions();
     physicsEngine.update((float) elapsedTime);
     for (GameObject go : engine.getSceneGraph().getGameObjects()) {
@@ -303,6 +303,8 @@ public class MyGame extends VariableFrameRateGame {
         mat.getRotation(aa);
         mat3.rotation(aa);
         go.setLocalRotation(mat3);
+        float[] ang = go.getPhysicsObject().getAngularVelocity();
+        go.getPhysicsObject().setAngularVelocity(new float[] { 0, ang[1], 0});
       }
     }
   }
