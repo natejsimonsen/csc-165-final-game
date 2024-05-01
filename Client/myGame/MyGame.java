@@ -17,6 +17,12 @@ import java.net.InetAddress;
 
 import java.net.UnknownHostException;
 
+import tage.physics.PhysicsEngine;
+import tage.physics.PhysicsObject;
+import tage.physics.JBullet.*;
+import com.bulletphysics.dynamics.RigidBody;
+import com.bulletphysics.collision.dispatch.CollisionObject;
+
 import org.joml.*;
 
 import net.java.games.input.*;
@@ -25,17 +31,18 @@ import tage.networking.IGameConnection.ProtocolType;
 
 public class MyGame extends VariableFrameRateGame {
   private static Engine engine;
-  private boolean touched;
   private InputManager im;
   private GhostManager gm;
   private String avatarName = "guy";
   private String textureName = "guy_2";
+  private PhysicsEngine physicsEngine;
 
   private int counter = 0;
   private Vector3f currentPosition;
   private Matrix4f initialTranslation, initialRotation, initialScale;
   private double lastFrameTime, currFrameTime, deltaTime, elapsedTime = 0;
 
+  private PhysicsObject terrP, avatarP;
   private GameObject terr, avatar, x, y, z;
   private ObjShape terrS, linxS, linyS, linzS;
   private TextureImage hills, brick;
@@ -51,6 +58,7 @@ public class MyGame extends VariableFrameRateGame {
   private ProtocolClient protClient;
   private boolean isClientConnected = false;
   private int sky;
+  private float vals[] = new float[16];
 
   public MyGame(String serverAddress, int serverPort, String protocol) {
     super();
@@ -155,17 +163,67 @@ public class MyGame extends VariableFrameRateGame {
 
     im = engine.getInputManager();
 
-    FwdAction fwdAction = new FwdAction(this, protClient);
+    FwdAction fwdAction = new FwdAction(this);
     TurnAction turnAction = new TurnAction(this);
 
     im.associateActionWithAllGamepads(
         net.java.games.input.Component.Identifier.Button._1,
         fwdAction, InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN);
+    im.associateActionWithAllKeyboards(
+        net.java.games.input.Component.Identifier.Key.W,
+        fwdAction, InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN);
+
+    im.associateActionWithAllKeyboards(
+        net.java.games.input.Component.Identifier.Key.D,
+        turnAction, InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN);
+    im.associateActionWithAllKeyboards(
+        net.java.games.input.Component.Identifier.Key.A,
+        turnAction, InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN);
     im.associateActionWithAllGamepads(
         net.java.games.input.Component.Identifier.Axis.X,
         turnAction, InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN);
 
     setupNetworking();
+
+    physicsEngine = (engine.getSceneGraph()).getPhysicsEngine();
+    float mass = 1.0f;
+    float up[] = { 0, 1, 0 };
+    float radius = 0.75f;
+    float height = 1.0f;
+    double[] tempTransform;
+
+    // add avatar object
+    Matrix4f translation = new Matrix4f(avatar.getLocalTranslation());
+    tempTransform = toDoubleArray(translation.get(vals));
+    avatarP = (engine.getSceneGraph()).addPhysicsCapsuleX(
+        mass, tempTransform, radius, height);
+    avatarP.setBounciness(0.8f);
+    avatar.setPhysicsObject(avatarP);
+
+    engine.enableGraphicsWorldRender();
+    engine.enablePhysicsWorldRender();
+  }
+
+  public float[] toFloatArray(double[] arr) {
+    if (arr == null)
+      return null;
+    int n = arr.length;
+    float[] ret = new float[n];
+    for (int i = 0; i < n; i++) {
+      ret[i] = (float) arr[i];
+    }
+    return ret;
+  }
+
+  public double[] toDoubleArray(float[] arr) {
+    if (arr == null)
+      return null;
+    int n = arr.length;
+    double[] ret = new double[n];
+    for (int i = 0; i < n; i++) {
+      ret[i] = (double) arr[i];
+    }
+    return ret;
   }
 
   public GameObject getAvatar() {
@@ -187,9 +245,15 @@ public class MyGame extends VariableFrameRateGame {
     elapsedTime += deltaTime;
   }
 
+  public double getElapsedTime() {
+    return elapsedTime;
+  }
+
   @Override
   public void update() {
     setTimes();
+    avatar.getPhysicsObject().setLinearVelocity(new float[] { 0, 0, 0 });
+    avatar.getPhysicsObject().setAngularVelocity(new float[] { 0, 0, 0 });
 
     // build and set HUD
     String dispStr2 = "camera position = "
@@ -203,39 +267,104 @@ public class MyGame extends VariableFrameRateGame {
     im.update((float) deltaTime);
     camCtrl.updateCameraPosition();
 
-    // update dolphin height
-    Vector3f loc = avatar.getWorldLocation();
-    float height = terr.getHeight(loc.x(), loc.z());
-    avatar.setLocalLocation(new Vector3f(loc.x(), height + 1f, loc.z()));
 
-    processNetworking((float) elapsedTime);
+    updatePhysics();
+
+    // Vector3f loc = avatar.getWorldLocation();
+    // float height = terr.getHeight(loc.x(), loc.z()) + 1.2f; // Adding 1f to adjust above terrain surface
+    // Matrix4f currentTransform = new Matrix4f(avatar.getWorldRotation());
+    // currentTransform.setTranslation(loc.x(), height, loc.z());
+    // double[] transformArray = toDoubleArray(currentTransform.get(new float[16]));
+    // avatar.setLocalTranslation(currentTransform);
+    // avatar.getPhysicsObject().setTransform(transformArray);
+
+    // updatePhysics();
+    
+    // processNetworking((float) elapsedTime);
   }
 
-  @Override
-  public void keyPressed(KeyEvent e) {
-    switch (e.getKeyCode()) {
-      case KeyEvent.VK_W: {
-        Vector3f oldPosition = avatar.getWorldLocation();
-        Vector4f fwdDirection = new Vector4f(0f, 0f, 1f, 1f);
-        fwdDirection.mul(avatar.getWorldRotation());
-        fwdDirection.mul(0.55f);
-        Vector3f newPosition = oldPosition.add(fwdDirection.x(), fwdDirection.y(), fwdDirection.z());
-        avatar.setLocalLocation(newPosition);
-        protClient.sendMoveMessage(avatar.getWorldLocation());
-        break;
-      }
-      case KeyEvent.VK_D: {
-        Matrix4f oldRotation = new Matrix4f(avatar.getWorldRotation());
-        Vector4f oldUp = new Vector4f(0f, 1f, 0f, 1f).mul(oldRotation);
-        Matrix4f rotAroundAvatarUp = new Matrix4f().rotation(-.05f, new Vector3f(oldUp.x(), oldUp.y(), oldUp.z()));
-        Matrix4f newRotation = oldRotation;
-        newRotation.mul(rotAroundAvatarUp);
-        avatar.setLocalRotation(newRotation);
-        break;
+  public GameObject getTerr() {
+    return terr;
+  }
+
+  public void updatePhysics() {
+    AxisAngle4f aa = new AxisAngle4f();
+    Matrix4f mat = new Matrix4f();
+    Matrix4f mat2 = new Matrix4f().identity();
+    Matrix4f mat3 = new Matrix4f().identity();
+    checkForCollisions();
+    physicsEngine.update((float) elapsedTime);
+    for (GameObject go : engine.getSceneGraph().getGameObjects()) {
+      if (go.getPhysicsObject() != null) { // set translation
+        mat.set(toFloatArray(go.getPhysicsObject().getTransform()));
+        mat2.set(3, 0, mat.m30());
+        mat2.set(3, 1, mat.m31());
+        mat2.set(3, 2, mat.m32());
+        go.setLocalTranslation(mat2);
+        // set rotation
+        mat.getRotation(aa);
+        mat3.rotation(aa);
+        go.setLocalRotation(mat3);
       }
     }
-    super.keyPressed(e);
   }
+
+  private void checkForCollisions() {
+    com.bulletphysics.dynamics.DynamicsWorld dynamicsWorld;
+    com.bulletphysics.collision.broadphase.Dispatcher dispatcher;
+    com.bulletphysics.collision.narrowphase.PersistentManifold manifold;
+    com.bulletphysics.dynamics.RigidBody object1, object2;
+    com.bulletphysics.collision.narrowphase.ManifoldPoint contactPoint;
+    dynamicsWorld = ((JBulletPhysicsEngine) physicsEngine).getDynamicsWorld();
+    dispatcher = dynamicsWorld.getDispatcher();
+    int manifoldCount = dispatcher.getNumManifolds();
+    for (int i = 0; i < manifoldCount; i++) {
+      manifold = dispatcher.getManifoldByIndexInternal(i);
+      object1 = (com.bulletphysics.dynamics.RigidBody) manifold.getBody0();
+      object2 = (com.bulletphysics.dynamics.RigidBody) manifold.getBody1();
+      JBulletPhysicsObject obj1 = JBulletPhysicsObject.getJBulletPhysicsObject(object1);
+      JBulletPhysicsObject obj2 = JBulletPhysicsObject.getJBulletPhysicsObject(object2);
+      for (int j = 0; j < manifold.getNumContacts(); j++) {
+        contactPoint = manifold.getContactPoint(j);
+        if (contactPoint.getDistance() < 0.0f) {
+          System.out.println("---- hit between " + obj1 + " and " + obj2);
+          break;
+        }
+      }
+    }
+  }
+
+  public ProtocolClient getProtClient() {
+    return protClient;
+  }
+
+  // @Override
+  // public void keyPressed(KeyEvent e) {
+  // switch (e.getKeyCode()) {
+  // case KeyEvent.VK_W: {
+  // Vector3f oldPosition = avatar.getWorldLocation();
+  // Vector4f fwdDirection = new Vector4f(0f, 0f, 1f, 1f);
+  // fwdDirection.mul(avatar.getWorldRotation());
+  // fwdDirection.mul(0.55f);
+  // Vector3f newPosition = oldPosition.add(fwdDirection.x(), fwdDirection.y(),
+  // fwdDirection.z());
+  // avatar.setLocalLocation(newPosition);
+  // protClient.sendMoveMessage(avatar.getWorldLocation());
+  // break;
+  // }
+  // case KeyEvent.VK_D: {
+  // Matrix4f oldRotation = new Matrix4f(avatar.getWorldRotation());
+  // Vector4f oldUp = new Vector4f(0f, 1f, 0f, 1f).mul(oldRotation);
+  // Matrix4f rotAroundAvatarUp = new Matrix4f().rotation(-.05f, new
+  // Vector3f(oldUp.x(), oldUp.y(), oldUp.z()));
+  // Matrix4f newRotation = oldRotation;
+  // newRotation.mul(rotAroundAvatarUp);
+  // avatar.setLocalRotation(newRotation);
+  // break;
+  // }
+  // }
+  // super.keyPressed(e);
+  // }
 
   // ---------- NETWORKING SECTION ----------------
 

@@ -9,6 +9,7 @@ import java.util.Vector;
 import org.joml.*;
 
 import tage.*;
+import tage.physics.PhysicsObject;
 
 public class GhostManager {
   private MyGame game;
@@ -25,6 +26,20 @@ public class GhostManager {
     GhostAvatar newAvatar = new GhostAvatar(id, s, t, position);
     Matrix4f initialScale = (new Matrix4f()).scaling(0.25f);
     newAvatar.setLocalScale(initialScale);
+
+    // float mass = 1.0f;
+    // float up[] = { 0, 1, 0 };
+    // float radius = 0.75f;
+    // float height = 1.0f;
+    // double[] tempTransform;
+    // float [] vals = new float[16];
+
+    // Matrix4f translation = new Matrix4f(newAvatar.getLocalTranslation());
+    // tempTransform = game.toDoubleArray(translation.get(vals));
+    // PhysicsObject avatarP = (game.getEngine().getSceneGraph()).addPhysicsCapsuleX(
+    //     mass, tempTransform, radius, height);
+    // avatarP.setBounciness(0.8f);
+    // newAvatar.setPhysicsObject(avatarP);
     ghostAvatars.add(newAvatar);
   }
 

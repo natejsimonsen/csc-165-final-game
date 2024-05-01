@@ -3,6 +3,7 @@ package myGame;
 import tage.*;
 import tage.input.action.AbstractInputAction;
 import net.java.games.input.Event;
+import tage.physics.PhysicsObject;
 import org.joml.*;
 
 public class FwdAction extends AbstractInputAction {
@@ -10,22 +11,42 @@ public class FwdAction extends AbstractInputAction {
   private GameObject av;
   private Vector3f oldPosition, newPosition;
   private Vector4f fwdDirection;
-  private ProtocolClient protClient;
 
-  public FwdAction(MyGame g, ProtocolClient p) {
+  public FwdAction(MyGame g) {
     game = g;
-    protClient = p;
   }
 
   @Override
-  public void performAction(float time, Event e) {
-    av = game.getAvatar();
-    oldPosition = av.getWorldLocation();
-    fwdDirection = new Vector4f(0f, 0f, 1f, 1f);
-    fwdDirection.mul(av.getWorldRotation());
-    fwdDirection.mul(0.01f);
-    newPosition = oldPosition.add(fwdDirection.x(), fwdDirection.y(), fwdDirection.z());
-    av.setLocalLocation(newPosition);
-    protClient.sendMoveMessage(av.getWorldLocation());
+  public void performAction(float time, net.java.games.input.Event evt) {
+    GameObject avatar = game.getAvatar();
+    PhysicsObject avatarPhysics = avatar.getPhysicsObject();
+
+    if (avatarPhysics != null && avatarPhysics.isDynamic()) {
+      Vector3f velocity = new Vector3f(0, 0, -10);
+      Matrix4f rotationMatrix = avatar.getWorldRotation();
+      Quaternionf rotationQuaternion = new Quaternionf();
+      rotationMatrix.getNormalizedRotation(rotationQuaternion);
+      velocity.rotate(rotationQuaternion);
+      avatarPhysics.setLinearVelocity(new float[] {
+          velocity.x,
+          velocity.y,
+          velocity.z
+      });
+
+      game.getProtClient().sendMoveMessage(av.getWorldLocation());
+    }
   }
+
+  // @Override
+  // public void performAction(float time, net.java.games.input.Event evt) {
+  // // Retrieve the physics object
+  // if (avatarPhysics != null) {
+  // // Apply a forward impulse or force
+  // Vector3f direction = new Vector3f(0, 0, 1); // Forward direction
+  // direction.mul(game.getAvatar().getWorldRotation()); // Adjust to current
+  // rotation
+  // direction.mul(10 * time); // Scale by a speed factor and delta time
+  // avatarPhysics.applyImpulse(direction.x(), direction.y(), direction.z());
+  // }
+  // }
 }

@@ -106,6 +106,8 @@ public class ProtocolClient extends GameConnectionClient {
         // Parse out the id into a UUID
         UUID ghostID = UUID.fromString(messageTokens[1]);
 
+        System.out.println("moving");
+
         // Parse out the position into a Vector3f
         Vector3f ghostPosition = new Vector3f(
             Float.parseFloat(messageTokens[2]),
