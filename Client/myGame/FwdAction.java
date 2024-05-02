@@ -28,7 +28,6 @@ public class FwdAction extends AbstractInputAction {
     fwdDirection.mul(speed);
     newPosition = oldPosition.add(fwdDirection.x(), fwdDirection.y(), fwdDirection.z());
     av.setLocalLocation(newPosition);
-    game.getProtClient().sendMoveMessage(av.getWorldLocation());
   } 
 
   // @Override

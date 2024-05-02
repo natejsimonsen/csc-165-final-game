@@ -10,10 +10,12 @@ import org.joml.*;
 
 import tage.*;
 import tage.physics.PhysicsObject;
+import tage.audio.*;
 
 public class GhostManager {
   private MyGame game;
   private Vector<GhostAvatar> ghostAvatars = new Vector<GhostAvatar>();
+  private Sound ghostWalkSound;
 
   public GhostManager(VariableFrameRateGame vfrg) {
     game = (MyGame) vfrg;
@@ -38,9 +40,15 @@ public class GhostManager {
     tempTransform = game.toDoubleArray(translation.get(vals));
     PhysicsObject avatarP = (game.getEngine().getSceneGraph()).addPhysicsCapsuleX(
         mass, tempTransform, radius, height);
-    avatarP.setBounciness(0.0f);
+    avatarP.setBounciness(1.0f);
+    avatarP.setDamping(0.8f, 0.8f);
+    avatarP.setSleepThresholds(0.05f, 0.05f); // Low sleep thresholds
     newAvatar.setPhysicsObject(avatarP);
     ghostAvatars.add(newAvatar);
+
+    ghostWalkSound = game.getGhostSound();
+    ghostWalkSound.setLocation(newAvatar.getWorldLocation());
+    ghostWalkSound.play();
   }
 
   public void removeGhostAvatar(UUID id) {
@@ -69,6 +77,7 @@ public class GhostManager {
     GhostAvatar ghostAvatar = findAvatar(id);
     if (ghostAvatar != null) {
       ghostAvatar.setPosition(position);
+      ghostWalkSound.setLocation(ghostAvatar.getWorldLocation());
     } else {
       System.out.println("tried to update ghost avatar position, but unable to find ghost in list");
     }

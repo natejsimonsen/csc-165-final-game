@@ -27,6 +27,7 @@ import org.joml.*;
 
 import net.java.games.input.*;
 import net.java.games.input.Component.Identifier.*;
+import tage.audio.*;
 import tage.networking.IGameConnection.ProtocolType;
 
 public class MyGame extends VariableFrameRateGame {
@@ -51,6 +52,8 @@ public class MyGame extends VariableFrameRateGame {
   private HashMap<String, ObjShape> playerShapes;
   private CameraOrbit3D camCtrl;
   private Camera cam;
+  private IAudioManager audioMgr;
+  private Sound bgSound, ghostSound;
 
   private String serverAddress;
   private int serverPort;
@@ -85,6 +88,26 @@ public class MyGame extends VariableFrameRateGame {
     playerShapes.put("dolphin", new ImportedModel("dolphinHighPoly.obj"));
     playerShapes.put("guy", new ImportedModel("avatar.obj"));
     playerShapes.put("bucket", new ImportedModel("cylinder.obj"));
+  }
+
+  
+  @Override
+  public void loadSounds() { 
+    AudioResource resource1, resource2;
+    audioMgr = engine.getAudioManager();
+    resource1 = audioMgr.createAudioResource("assets/sounds/bad-game-music.wav", AudioResourceType.AUDIO_SAMPLE);
+    bgSound = new Sound(resource1, SoundType.SOUND_MUSIC, 0, true);
+    bgSound.initialize(audioMgr);
+    bgSound.setMaxDistance(10.0f);
+    bgSound.setMinDistance(0.5f);
+    bgSound.setRollOff(5.0f);
+
+    resource2 = audioMgr.createAudioResource("assets/sounds/click.wav", AudioResourceType.AUDIO_SAMPLE);
+    ghostSound = new Sound(resource2, SoundType.SOUND_EFFECT, 100, true);
+    ghostSound.initialize(audioMgr);
+    ghostSound.setMaxDistance(50.0f);
+    ghostSound.setMinDistance(10.0f);
+    ghostSound.setRollOff(2.0f);
   }
 
   @Override
@@ -200,11 +223,15 @@ public class MyGame extends VariableFrameRateGame {
     tempTransform = toDoubleArray(translation.get(vals));
     avatarP = (engine.getSceneGraph()).addPhysicsCapsuleX(
         mass, tempTransform, radius, height);
-    avatarP.setBounciness(0.0f);
+    avatarP.setBounciness(1.0f);
+    avatarP.setDamping(0.8f, 0.8f);
+    avatarP.setSleepThresholds(0.05f, 0.05f); // Low sleep thresholds
     avatar.setPhysicsObject(avatarP);
 
     engine.enableGraphicsWorldRender();
     engine.enablePhysicsWorldRender();
+
+    bgSound.play();
   }
 
   public float[] toFloatArray(double[] arr) {
@@ -252,32 +279,46 @@ public class MyGame extends VariableFrameRateGame {
     return elapsedTime;
   }
 
+  public Sound getGhostSound() {
+    return ghostSound;
+  }
+
   @Override
   public void update() {
     setTimes();
+    drawHUD();
+    setEarParameters();
+    im.update((float) deltaTime);
+    camCtrl.updateCameraPosition();
+    setGroundHeightForAvatar();
+    updatePhysics();
+    protClient.sendMoveMessage(avatar.getWorldLocation());
+    processNetworking((float) elapsedTime);
+  }
 
-    // build and set HUD
+  public void drawHUD() {
     String dispStr2 = "camera position = "
         + (cam.getLocation()).x()
         + ", " + (cam.getLocation()).y()
         + ", " + (cam.getLocation()).z();
     Vector3f hud2Color = new Vector3f(1, 1, 1);
     (engine.getHUDmanager()).setHUD2(dispStr2, hud2Color, 500, 15);
+  }
 
-    // update inputs and camera
-    im.update((float) deltaTime);
-    camCtrl.updateCameraPosition();
 
+  public void setEarParameters() { 
+    audioMgr.getEar().setLocation(avatar.getWorldLocation());
+    audioMgr.getEar().setOrientation(cam.getN(), new Vector3f(0.0f, 1.0f, 0.0f));
+  }
+
+  public void setGroundHeightForAvatar() {
     Vector3f loc = avatar.getWorldLocation();
-    float height = terr.getHeight(loc.x(), loc.z()) + 1.2f; // Adding 1f to adjust above terrain surface
+    float height = terr.getHeight(loc.x(), loc.z()) + 1.2f; 
     Matrix4f currentTransform = new Matrix4f(avatar.getWorldRotation());
     currentTransform.setTranslation(loc.x(), height, loc.z());
     double[] transformArray = toDoubleArray(currentTransform.get(new float[16]));
+    avatar.setLocalTranslation(currentTransform);
     avatar.getPhysicsObject().setTransform(transformArray);
-
-    updatePhysics();
-    
-    processNetworking((float) elapsedTime);
   }
 
   public GameObject getTerr() {
@@ -293,18 +334,16 @@ public class MyGame extends VariableFrameRateGame {
     checkForCollisions();
     physicsEngine.update((float) elapsedTime);
     for (GameObject go : engine.getSceneGraph().getGameObjects()) {
-      if (go.getPhysicsObject() != null) { // set translation
+      if (go.getPhysicsObject() != null) {
         mat.set(toFloatArray(go.getPhysicsObject().getTransform()));
         mat2.set(3, 0, mat.m30());
         mat2.set(3, 1, mat.m31());
         mat2.set(3, 2, mat.m32());
         go.setLocalTranslation(mat2);
         // set rotation
-        mat.getRotation(aa);
-        mat3.rotation(aa);
-        go.setLocalRotation(mat3);
-        float[] ang = go.getPhysicsObject().getAngularVelocity();
-        go.getPhysicsObject().setAngularVelocity(new float[] { 0, ang[1], 0});
+        // mat.getRotation(aa);
+        // mat3.rotation(aa);
+        // go.setLocalRotation(mat3);
       }
     }
   }
