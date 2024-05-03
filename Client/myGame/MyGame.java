@@ -34,8 +34,8 @@ public class MyGame extends VariableFrameRateGame {
   private static Engine engine;
   private InputManager im;
   private GhostManager gm;
-  private String avatarName = "guy";
-  private String textureName = "guy_2";
+  private String avatarName = "squareGuy";
+  private String textureName = "squareGuy";
   private PhysicsEngine physicsEngine;
 
   private int counter = 0;
@@ -87,6 +87,7 @@ public class MyGame extends VariableFrameRateGame {
     linzS = new Line(new Vector3f(0f, 0f, 0f), new Vector3f(0f, 0f, -3f));
     playerShapes.put("dolphin", new ImportedModel("dolphinHighPoly.obj"));
     playerShapes.put("guy", new ImportedModel("avatar.obj"));
+    playerShapes.put("squareGuy", new ImportedModel("square-avatar.obj"));
     playerShapes.put("bucket", new ImportedModel("cylinder.obj"));
   }
 
@@ -117,6 +118,7 @@ public class MyGame extends VariableFrameRateGame {
     playerTextures.put("dolphin_red", new TextureImage("redDolphin.jpg"));
     playerTextures.put("bucket", new TextureImage("Cylinder.png"));
     playerTextures.put("guy", new TextureImage("guy_2.png"));
+    playerTextures.put("squareGuy", new TextureImage("avatar-tex.png"));
     hills = new TextureImage("hills.jpg");
     brick = new TextureImage("brick1.jpg");
   }

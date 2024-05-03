@@ -25,7 +25,7 @@ import tage.audio.*;
  * <code>
  * 	distance = max(distance,AL_REFERENCE_DISTANCE);		<br>
  * 	distance = min(distance,AL_MAX_DISTANCE);		<br>
- * 	gain = AL_REFERENCE_DISTANCE / (AL_REFERENCE_DISTANCE + AL_ROLLOFF_FACTOR * (distance – AL_REFERENCE_DISTANCE));
+ * 	gain = AL_REFERENCE_DISTANCE / (AL_REFERENCE_DISTANCE + AL_ROLLOFF_FACTOR * (distance - AL_REFERENCE_DISTANCE));
  * </code>
  * 
  * 
@@ -150,7 +150,7 @@ public class JOALAudioManager extends AudioManager
 
 	/**
 	 * Initialize the JOALAudioManager.  This includes getting an AL object, initializes ALUT, creating a JOALAudioEar, 
-	 * and clearing the {@link sage.audio.AudioPlayer} collection. 
+	 * and clearing the {@link tage.audio.AudioPlayer} collection. 
 	 */
 	public boolean initialize() 
 	{
