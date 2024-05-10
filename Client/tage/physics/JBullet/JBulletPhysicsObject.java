@@ -6,6 +6,7 @@ import java.util.HashMap;
 import tage.physics.PhysicsObject;
 
 import com.bulletphysics.collision.shapes.CollisionShape;
+import com.bulletphysics.collision.dispatch.CollisionObject;
 import com.bulletphysics.dynamics.RigidBody;
 import com.bulletphysics.dynamics.RigidBodyConstructionInfo;
 import com.bulletphysics.linearmath.DefaultMotionState;
@@ -51,8 +52,9 @@ public abstract class JBulletPhysicsObject implements PhysicsObject {
         //TODO set reasonable defaults
         body.setSleepingThresholds(0.05f, 0.05f); //fix for objects stopping too soon
         body.setDamping(0.1f, 0.1f);
+        body.setActivationState(CollisionObject.DISABLE_DEACTIVATION);
 
-	JBulletPhysicsObject.lookUpObject.put(body,this);
+        JBulletPhysicsObject.lookUpObject.put(body,this);
     }
 
     public int getUID() {

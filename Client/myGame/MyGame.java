@@ -34,8 +34,8 @@ public class MyGame extends VariableFrameRateGame {
   private static Engine engine;
   private InputManager im;
   private GhostManager gm;
-  private String avatarName = "squareGuy";
-  private String textureName = "squareGuy";
+  private String avatarName;
+  private String textureName;
   private PhysicsEngine physicsEngine;
 
   private int counter = 0;
@@ -43,8 +43,8 @@ public class MyGame extends VariableFrameRateGame {
   private Matrix4f initialTranslation, initialRotation, initialScale;
   private double lastFrameTime, currFrameTime, deltaTime, elapsedTime = 0;
 
-  private PhysicsObject terrP, avatarP;
-  private GameObject terr, avatar, x, y, z;
+  private PhysicsObject terrP, avatarP, randomDudeP;
+  private GameObject terr, avatar, x, y, z, randomDude;
   private ObjShape terrS, linxS, linyS, linzS;
   private TextureImage hills, brick;
   private Light light;
@@ -63,19 +63,31 @@ public class MyGame extends VariableFrameRateGame {
   private int sky;
   private float vals[] = new float[16];
 
-  public MyGame(String serverAddress, int serverPort, String protocol) {
+  public MyGame(String serverAddress, int serverPort, String protocol, String avatarName, String textureName) {
     super();
     gm = new GhostManager(this);
     this.serverAddress = serverAddress;
     this.serverPort = serverPort;
     this.serverProtocol = ProtocolType.UDP;
+    this.avatarName = avatarName;
+    this.textureName = textureName;
   }
 
   public static void main(String[] args) {
-    MyGame game = new MyGame(args[0], Integer.parseInt(args[1]), args[2]);
-    engine = new Engine(game);
-    game.initializeSystem();
-    game.game_loop();
+    try {
+      File inputFile = new File("config.txt");
+      Scanner fileScanner = new Scanner(inputFile);
+      String line = fileScanner.nextLine();
+      String[] data = line.split("/");
+      String av = data[0];
+      String tex = data[1];
+      MyGame game = new MyGame(args[0], Integer.parseInt(args[1]), args[2], av, tex);
+      engine = new Engine(game);
+      game.initializeSystem();
+      game.game_loop();
+    } catch (FileNotFoundException e) {
+      System.err.println("Cannot find 'config.txt' file");
+    }
   }
 
   @Override
@@ -91,9 +103,20 @@ public class MyGame extends VariableFrameRateGame {
     playerShapes.put("bucket", new ImportedModel("cylinder.obj"));
   }
 
-  
   @Override
-  public void loadSounds() { 
+  public void loadTextures() {
+    playerTextures = new HashMap<>();
+    playerTextures.put("dolphin_normal", new TextureImage("Dolphin_HighPolyUV.png"));
+    playerTextures.put("dolphin_red", new TextureImage("redDolphin.jpg"));
+    playerTextures.put("bucket", new TextureImage("Cylinder.png"));
+    playerTextures.put("guy", new TextureImage("guy_2.png"));
+    playerTextures.put("squareGuy", new TextureImage("avatar-tex.png"));
+    hills = new TextureImage("hills.jpg");
+    brick = new TextureImage("brick1.jpg");
+  }
+
+  @Override
+  public void loadSounds() {
     AudioResource resource1, resource2;
     audioMgr = engine.getAudioManager();
     resource1 = audioMgr.createAudioResource("assets/sounds/bad-game-music.wav", AudioResourceType.AUDIO_SAMPLE);
@@ -109,18 +132,6 @@ public class MyGame extends VariableFrameRateGame {
     ghostSound.setMaxDistance(50.0f);
     ghostSound.setMinDistance(10.0f);
     ghostSound.setRollOff(2.0f);
-  }
-
-  @Override
-  public void loadTextures() {
-    playerTextures = new HashMap<>();
-    playerTextures.put("dolphin_normal", new TextureImage("Dolphin_HighPolyUV.png"));
-    playerTextures.put("dolphin_red", new TextureImage("redDolphin.jpg"));
-    playerTextures.put("bucket", new TextureImage("Cylinder.png"));
-    playerTextures.put("guy", new TextureImage("guy_2.png"));
-    playerTextures.put("squareGuy", new TextureImage("avatar-tex.png"));
-    hills = new TextureImage("hills.jpg");
-    brick = new TextureImage("brick1.jpg");
   }
 
   @Override
@@ -142,6 +153,15 @@ public class MyGame extends VariableFrameRateGame {
     avatar.setLocalRotation(initialRotation);
     initialScale = (new Matrix4f()).scaling(0.25f);
     avatar.setLocalScale(initialScale);
+
+    // build random dude
+    randomDude = new GameObject(GameObject.root(), playerShapes.get(avatarName), playerTextures.get(textureName));
+    initialTranslation = (new Matrix4f()).translation(-10f, 2f, 1f);
+    randomDude.setLocalTranslation(initialTranslation);
+    initialRotation = (new Matrix4f()).rotationY((float) java.lang.Math.toRadians(135.0f));
+    randomDude.setLocalRotation(initialRotation);
+    initialScale = (new Matrix4f()).scaling(0.25f);
+    randomDude.setLocalScale(initialScale);
 
     // build terrain object
     terr = new GameObject(GameObject.root(), terrS, brick);
@@ -230,6 +250,16 @@ public class MyGame extends VariableFrameRateGame {
     avatarP.setSleepThresholds(0.05f, 0.05f); // Low sleep thresholds
     avatar.setPhysicsObject(avatarP);
 
+    // add temporary random dude
+    translation = new Matrix4f(randomDude.getLocalTranslation());
+    tempTransform = toDoubleArray(translation.get(vals));
+    randomDudeP = (engine.getSceneGraph()).addPhysicsCapsuleX(
+        mass, tempTransform, radius, height);
+    randomDudeP.setBounciness(1.0f);
+    randomDudeP.setDamping(0.8f, 0.8f);
+    randomDudeP.setSleepThresholds(0.05f, 0.05f); // Low sleep thresholds
+    randomDude.setPhysicsObject(randomDudeP);
+
     engine.enableGraphicsWorldRender();
     engine.enablePhysicsWorldRender();
 
@@ -307,15 +337,14 @@ public class MyGame extends VariableFrameRateGame {
     (engine.getHUDmanager()).setHUD2(dispStr2, hud2Color, 500, 15);
   }
 
-
-  public void setEarParameters() { 
+  public void setEarParameters() {
     audioMgr.getEar().setLocation(avatar.getWorldLocation());
     audioMgr.getEar().setOrientation(cam.getN(), new Vector3f(0.0f, 1.0f, 0.0f));
   }
 
   public void setGroundHeightForAvatar() {
     Vector3f loc = avatar.getWorldLocation();
-    float height = terr.getHeight(loc.x(), loc.z()) + 1.2f; 
+    float height = terr.getHeight(loc.x(), loc.z()) + 1.2f;
     Matrix4f currentTransform = new Matrix4f(avatar.getWorldRotation());
     currentTransform.setTranslation(loc.x(), height, loc.z());
     double[] transformArray = toDoubleArray(currentTransform.get(new float[16]));

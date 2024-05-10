@@ -447,14 +447,14 @@ public class GameObject {
     update();
   }
 
-  /** rotates the object around the y axis */
+  /** rotates the object around the world y-axis */
   public void yaw(float rot) {
     Matrix4f yAxisRotation = new Matrix4f().rotate(rot, 0, 1, 0);
     localRotation = yAxisRotation.mul(localRotation);
     update();
   }
 
-  /** rotates the object around the x axis */
+  /** rotates the object around its x-axis */
   public void pitch(float rot) {
     localRotation = localRotation.rotateX(rot);
     update();
