@@ -39,6 +39,7 @@ public class MyGame extends VariableFrameRateGame {
   private String textureName;
   private PhysicsEngine physicsEngine;
   private boolean animatedShape = false;
+  private boolean lightEnabled = false;
 
   private int counter = 0;
   private int avatarScore = 0;
@@ -283,26 +284,31 @@ public class MyGame extends VariableFrameRateGame {
     (engine.getSceneGraph()).addLight(spotLight);
   }
 
-  @Override
-  public void initializeGame() {
-    (engine.getRenderSystem()).setWindowDimensions(1900, 1000);
-    setupMainCamera();
-    lastFrameTime = System.currentTimeMillis();
-    currFrameTime = System.currentTimeMillis();
+  public Light getSpotLight() {
+    return spotLight;
+  }
 
-    im = engine.getInputManager();
+  public boolean getIsLightEnabled() {
+    return lightEnabled;
+  }
 
+  public void toggleLightEnabled() {
+    lightEnabled = !lightEnabled;
+  }
+
+  private void setActions() {
     FwdAction fwdAction = new FwdAction(this);
     TurnAction turnAction = new TurnAction(this);
+    ToggleLightAction toggleLightAction = new ToggleLightAction(this);
 
-    im.associateActionWithAllGamepads(
-        net.java.games.input.Component.Identifier.Button._1,
-        fwdAction, InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN);
     im.associateActionWithAllKeyboards(
         net.java.games.input.Component.Identifier.Key.W,
         fwdAction, InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN);
     im.associateActionWithAllKeyboards(
         net.java.games.input.Component.Identifier.Key.S,
+        fwdAction, InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN);
+    im.associateActionWithAllGamepads(
+        net.java.games.input.Component.Identifier.Axis.Y,
         fwdAction, InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN);
 
     im.associateActionWithAllKeyboards(
@@ -315,8 +321,15 @@ public class MyGame extends VariableFrameRateGame {
         net.java.games.input.Component.Identifier.Axis.X,
         turnAction, InputManager.INPUT_ACTION_TYPE.REPEAT_WHILE_DOWN);
 
-    setupNetworking();
+    im.associateActionWithAllKeyboards(
+      net.java.games.input.Component.Identifier.Key.L,
+      toggleLightAction, InputManager.INPUT_ACTION_TYPE.ON_PRESS_ONLY);
+    im.associateActionWithAllGamepads(
+        net.java.games.input.Component.Identifier.Button._1,
+        toggleLightAction, InputManager.INPUT_ACTION_TYPE.ON_PRESS_ONLY);
+  }
 
+  private void setupPhysicsObjects() {
     physicsEngine = (engine.getSceneGraph()).getPhysicsEngine();
     float mass = 0.01f;
     float up[] = { 0, 1, 0 };
@@ -333,9 +346,19 @@ public class MyGame extends VariableFrameRateGame {
     avatarP.setDamping(0.8f, 0.8f);
     avatarP.setSleepThresholds(0.05f, 0.05f);
     avatar.setPhysicsObject(avatarP);
+  }
 
+  @Override
+  public void initializeGame() {
+    setupNetworking();
+    (engine.getRenderSystem()).setWindowDimensions(1900, 1000);
+    setupMainCamera();
+    lastFrameTime = System.currentTimeMillis();
+    currFrameTime = System.currentTimeMillis();
+    im = engine.getInputManager();
+    setActions();
+    setupPhysicsObjects();
     engine.enableGraphicsWorldRender();
-
     bgSound.play();
   }
 
