@@ -48,17 +48,17 @@ public class MyGame extends VariableFrameRateGame {
   private double lastFrameTime, currFrameTime, deltaTime, elapsedTime = 0;
 
   private PhysicsObject terrP, avatarP;
-  private GameObject terr, avatar, x, y, z;
+  private GameObject terr, avatar, x, y, z, bucket;
   private ArrayList<GameObject> foods;
-  private ObjShape terrS, linxS, linyS, linzS, cubeS;
-  private TextureImage foodTex, hills, brick;
-  private Light light;
+  private ObjShape terrS, linxS, linyS, linzS, cubeS, cylinderS;
+  private TextureImage foodTex, hills, brick, bucketTex;
+  private Light light, spotLight;
   private HashMap<String, TextureImage> playerTextures;
   private HashMap<String, ObjShape> playerShapes;
   private CameraOrbit3D camCtrl;
   private Camera cam;
   private IAudioManager audioMgr;
-  private Sound bgSound, ghostSound;
+  private Sound bgSound, ghostSound, foodSound;
   private Random random;
 
   private String serverAddress;
@@ -77,7 +77,7 @@ public class MyGame extends VariableFrameRateGame {
     this.serverProtocol = ProtocolType.UDP;
     this.avatarName = avatarName;
     this.textureName = textureName;
-    animatedShape = (avatarName == "squareGuy");
+    animatedShape = avatarName.equals("squareGuy");
     random = new Random();
     foods = new ArrayList<GameObject>();
   }
@@ -107,6 +107,7 @@ public class MyGame extends VariableFrameRateGame {
     linyS = new Line(new Vector3f(0f, 0f, 0f), new Vector3f(0f, 3f, 0f));
     linzS = new Line(new Vector3f(0f, 0f, 0f), new Vector3f(0f, 0f, -3f));
     cubeS = new Cube();
+    cylinderS = new ImportedModel("cylinder.obj");
     playerShapes.put("dolphin", new ImportedModel("dolphinHighPoly.obj"));
     playerShapes.put("guy", new ImportedModel("avatar.obj"));
     AnimatedShape animAvatar = new AnimatedShape("avatar.rkm", "avatar.rks");
@@ -124,6 +125,11 @@ public class MyGame extends VariableFrameRateGame {
         min = distance;
     }
     return min;
+  }
+
+  public void playGhostFoodSound() {
+    foodSound.setLocation(gm.getGhost().getWorldLocation());
+    foodSound.play();
   }
 
   private void placeRandomFood() {
@@ -146,9 +152,11 @@ public class MyGame extends VariableFrameRateGame {
       GameObject food = foods.get(i);
       Vector3f foodLocation = food.getWorldLocation();
       Vector3f avatarLocation = avatar.getWorldLocation();
-      if (foodLocation.distance(avatarLocation) < 0.75f) {
+      if (foodLocation.distance(avatarLocation) < 1.75f) {
         foodToRemove = food;
         engine.getSceneGraph().removeGameObject(food);
+        foodSound.setLocation(avatar.getWorldLocation());
+        foodSound.play();
         avatarScore++;
         protClient.sendUpdateScoreMessage();
       }
@@ -176,14 +184,16 @@ public class MyGame extends VariableFrameRateGame {
     hills = new TextureImage("hills.jpg");
     brick = new TextureImage("brick1.jpg");
     foodTex = new TextureImage("food.png");
+    bucketTex = new TextureImage("Cylinder.png");
   }
 
   @Override
   public void loadSounds() {
-    AudioResource resource1, resource2;
+    AudioResource resource1, resource2, resource3;
     audioMgr = engine.getAudioManager();
+
     resource1 = audioMgr.createAudioResource("assets/sounds/bad-game-music.wav", AudioResourceType.AUDIO_SAMPLE);
-    bgSound = new Sound(resource1, SoundType.SOUND_MUSIC, 0, true);
+    bgSound = new Sound(resource1, SoundType.SOUND_MUSIC, 40, true);
     bgSound.initialize(audioMgr);
     bgSound.setMaxDistance(10.0f);
     bgSound.setMinDistance(0.5f);
@@ -195,6 +205,13 @@ public class MyGame extends VariableFrameRateGame {
     ghostSound.setMaxDistance(50.0f);
     ghostSound.setMinDistance(10.0f);
     ghostSound.setRollOff(2.0f);
+
+    resource3 = audioMgr.createAudioResource("assets/sounds/powerUp.wav", AudioResourceType.AUDIO_SAMPLE);
+    foodSound = new Sound(resource3, SoundType.SOUND_EFFECT, 100, false);
+    foodSound.initialize(audioMgr);
+    foodSound.setMaxDistance(50.0f);
+    foodSound.setMinDistance(10.0f);
+    foodSound.setRollOff(2.0f);
   }
 
   @Override
@@ -216,6 +233,13 @@ public class MyGame extends VariableFrameRateGame {
     avatar.setLocalRotation(initialRotation);
     initialScale = (new Matrix4f()).scaling(0.25f);
     avatar.setLocalScale(initialScale);
+
+    // build bucket
+    bucket = new GameObject(avatar, cylinderS, bucketTex);
+    bucket.setLocalLocation(new Vector3f(-0.5f, 1.25f, 0.75f));
+    bucket.propagateRotation(true);
+    bucket.propagateTranslation(true);
+    bucket.applyParentRotationToPosition(true);
 
     // build terrain object
     terr = new GameObject(GameObject.root(), terrS, brick);
@@ -251,6 +275,12 @@ public class MyGame extends VariableFrameRateGame {
     light = new Light();
     light.setLocation(new Vector3f(0f, 5f, 0f));
     (engine.getSceneGraph()).addLight(light);
+
+    spotLight = new Light();
+    spotLight.setType(Light.LightType.SPOTLIGHT);
+    spotLight.setLocation(new Vector3f(3f, 2f, 4f));
+    spotLight.setDirection(new Vector3f(1f, 1f, 1f));
+    (engine.getSceneGraph()).addLight(spotLight);
   }
 
   @Override
@@ -288,7 +318,7 @@ public class MyGame extends VariableFrameRateGame {
     setupNetworking();
 
     physicsEngine = (engine.getSceneGraph()).getPhysicsEngine();
-    float mass = 1.0f;
+    float mass = 0.01f;
     float up[] = { 0, 1, 0 };
     float radius = 0.75f;
     float height = 1.0f;
@@ -301,11 +331,10 @@ public class MyGame extends VariableFrameRateGame {
         mass, tempTransform, radius, height);
     avatarP.setBounciness(1.0f);
     avatarP.setDamping(0.8f, 0.8f);
-    avatarP.setSleepThresholds(0.05f, 0.05f); // Low sleep thresholds
+    avatarP.setSleepThresholds(0.05f, 0.05f);
     avatar.setPhysicsObject(avatarP);
 
     engine.enableGraphicsWorldRender();
-    engine.enablePhysicsWorldRender();
 
     bgSound.play();
   }
@@ -364,10 +393,8 @@ public class MyGame extends VariableFrameRateGame {
     setTimes();
     drawHUD();
     setEarParameters();
-    if (animatedShape == true) {
-      AnimatedShape s = (AnimatedShape) avatar.getShape();
-      s.updateAnimation();
-    }
+    if (animatedShape == true)
+      ((AnimatedShape) avatar.getShape()).updateAnimation();
     im.update((float) deltaTime);
     camCtrl.updateCameraPosition();
     setGroundHeightForAvatar();
@@ -456,38 +483,23 @@ public class MyGame extends VariableFrameRateGame {
     return protClient;
   }
 
-  // @Override
-  // public void keyPressed(KeyEvent e) {
-  // switch (e.getKeyCode()) {
-  // case KeyEvent.VK_W: {
-  // Vector3f oldPosition = avatar.getWorldLocation();
-  // Vector4f fwdDirection = new Vector4f(0f, 0f, 1f, 1f);
-  // fwdDirection.mul(avatar.getWorldRotation());
-  // fwdDirection.mul(0.55f);
-  // Vector3f newPosition = oldPosition.add(fwdDirection.x(), fwdDirection.y(),
-  // fwdDirection.z());
-  // avatar.setLocalLocation(newPosition);
-  // protClient.sendMoveMessage(avatar.getWorldLocation());
-  // break;
-  // }
-  // case KeyEvent.VK_D: {
-  // Matrix4f oldRotation = new Matrix4f(avatar.getWorldRotation());
-  // Vector4f oldUp = new Vector4f(0f, 1f, 0f, 1f).mul(oldRotation);
-  // Matrix4f rotAroundAvatarUp = new Matrix4f().rotation(-.05f, new
-  // Vector3f(oldUp.x(), oldUp.y(), oldUp.z()));
-  // Matrix4f newRotation = oldRotation;
-  // newRotation.mul(rotAroundAvatarUp);
-  // avatar.setLocalRotation(newRotation);
-  // break;
-  // }
-  // }
-  // super.keyPressed(e);
-  // }
+  private void exit() {
+    protClient.sendByeMessage();
+    System.exit(0);
+  }
 
   @Override
-  public void keyPressed(KeyEvent e) { 
+  public void keyPressed(KeyEvent e) {
+    switch (e.getKeyCode()) {
+      case KeyEvent.VK_ESCAPE:
+        exit();
+        break;
+    }
+
+    if (animatedShape == false)
+      return;
     AnimatedShape s = (AnimatedShape) avatar.getShape();
-    switch (e.getKeyCode()) { 
+    switch (e.getKeyCode()) {
       case KeyEvent.VK_Z:
         s.stopAnimation();
         s.playAnimation("WALK", 0.5f, AnimatedShape.EndType.LOOP, 0);

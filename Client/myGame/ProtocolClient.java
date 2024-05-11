@@ -121,6 +121,7 @@ public class ProtocolClient extends GameConnectionClient {
       // Format: ugs
       if (messageTokens[0].compareTo("ugs") == 0) {
         game.updateGhostScore();
+        game.playGhostFoodSound();
       }
     }
   }

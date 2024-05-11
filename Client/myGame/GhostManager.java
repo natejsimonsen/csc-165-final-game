@@ -51,6 +51,11 @@ public class GhostManager {
     ghostWalkSound.play();
   }
 
+  public GhostAvatar getGhost() {
+    Iterator<GhostAvatar> it = ghostAvatars.iterator();
+    return it.next();
+  }
+
   public void removeGhostAvatar(UUID id) {
     GhostAvatar ghostAvatar = findAvatar(id);
     if (ghostAvatar != null) {
