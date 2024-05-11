@@ -22,6 +22,7 @@ import tage.physics.PhysicsObject;
 import tage.physics.JBullet.*;
 import com.bulletphysics.dynamics.RigidBody;
 import com.bulletphysics.collision.dispatch.CollisionObject;
+import java.util.Random;
 
 import org.joml.*;
 
@@ -37,16 +38,20 @@ public class MyGame extends VariableFrameRateGame {
   private String avatarName;
   private String textureName;
   private PhysicsEngine physicsEngine;
+  private boolean animatedShape = false;
 
   private int counter = 0;
+  private int avatarScore = 0;
+  private int ghostScore = 0;
   private Vector3f currentPosition;
   private Matrix4f initialTranslation, initialRotation, initialScale;
   private double lastFrameTime, currFrameTime, deltaTime, elapsedTime = 0;
 
-  private PhysicsObject terrP, avatarP, randomDudeP;
-  private GameObject terr, avatar, x, y, z, randomDude;
-  private ObjShape terrS, linxS, linyS, linzS;
-  private TextureImage hills, brick;
+  private PhysicsObject terrP, avatarP;
+  private GameObject terr, avatar, x, y, z;
+  private ArrayList<GameObject> foods;
+  private ObjShape terrS, linxS, linyS, linzS, cubeS;
+  private TextureImage foodTex, hills, brick;
   private Light light;
   private HashMap<String, TextureImage> playerTextures;
   private HashMap<String, ObjShape> playerShapes;
@@ -54,6 +59,7 @@ public class MyGame extends VariableFrameRateGame {
   private Camera cam;
   private IAudioManager audioMgr;
   private Sound bgSound, ghostSound;
+  private Random random;
 
   private String serverAddress;
   private int serverPort;
@@ -71,6 +77,9 @@ public class MyGame extends VariableFrameRateGame {
     this.serverProtocol = ProtocolType.UDP;
     this.avatarName = avatarName;
     this.textureName = textureName;
+    animatedShape = (avatarName == "squareGuy");
+    random = new Random();
+    foods = new ArrayList<GameObject>();
   }
 
   public static void main(String[] args) {
@@ -97,10 +106,63 @@ public class MyGame extends VariableFrameRateGame {
     linxS = new Line(new Vector3f(0f, 0f, 0f), new Vector3f(3f, 0f, 0f));
     linyS = new Line(new Vector3f(0f, 0f, 0f), new Vector3f(0f, 3f, 0f));
     linzS = new Line(new Vector3f(0f, 0f, 0f), new Vector3f(0f, 0f, -3f));
+    cubeS = new Cube();
     playerShapes.put("dolphin", new ImportedModel("dolphinHighPoly.obj"));
     playerShapes.put("guy", new ImportedModel("avatar.obj"));
-    playerShapes.put("squareGuy", new ImportedModel("square-avatar.obj"));
+    AnimatedShape animAvatar = new AnimatedShape("avatar.rkm", "avatar.rks");
+    animAvatar.loadAnimation("WALK", "walk.rka");
+    playerShapes.put("squareGuy", animAvatar);
     playerShapes.put("bucket", new ImportedModel("cylinder.obj"));
+  }
+
+  private float getRelativeFoodDistance(Vector3f possibleLocation) {
+    float min = 10000000000f;
+    for (int i = 0; i < foods.size(); i++) {
+      Vector3f foodLocation = foods.get(i).getWorldLocation();
+      float distance = (float) foodLocation.distance(possibleLocation);
+      if (distance < min)
+        min = distance;
+    }
+    return min;
+  }
+
+  private void placeRandomFood() {
+    for (int i = 0; i < 20; i++) {
+      GameObject food = new GameObject(GameObject.root(), cubeS, foodTex);
+      Vector3f location = randomFoodLocation();
+      while (getRelativeFoodDistance(location) < 10f) {
+        location = randomFoodLocation();
+      }
+      food.setLocalLocation(randomFoodLocation());
+      Matrix4f initialScale = (new Matrix4f()).scaling(0.25f);
+      food.setLocalScale(initialScale);
+      foods.add(food);
+    }
+  }
+
+  private void checkFoodEaten() {
+    GameObject foodToRemove = null;
+    for (int i = 0; i < foods.size(); i++) {
+      GameObject food = foods.get(i);
+      Vector3f foodLocation = food.getWorldLocation();
+      Vector3f avatarLocation = avatar.getWorldLocation();
+      if (foodLocation.distance(avatarLocation) < 0.75f) {
+        foodToRemove = food;
+        engine.getSceneGraph().removeGameObject(food);
+        avatarScore++;
+        protClient.sendUpdateScoreMessage();
+      }
+    }
+    if (foodToRemove != null)
+      foods.remove(foodToRemove);
+  }
+
+  private Vector3f randomFoodLocation() {
+    int range = 100;
+    float x = random.nextFloat() * range - (range / 2);
+    float z = random.nextFloat() * range - (range / 2);
+    float y = terr.getHeight(x, z) + 1.2f;
+    return new Vector3f(x, y, z);
   }
 
   @Override
@@ -113,6 +175,7 @@ public class MyGame extends VariableFrameRateGame {
     playerTextures.put("squareGuy", new TextureImage("avatar-tex.png"));
     hills = new TextureImage("hills.jpg");
     brick = new TextureImage("brick1.jpg");
+    foodTex = new TextureImage("food.png");
   }
 
   @Override
@@ -153,15 +216,6 @@ public class MyGame extends VariableFrameRateGame {
     avatar.setLocalRotation(initialRotation);
     initialScale = (new Matrix4f()).scaling(0.25f);
     avatar.setLocalScale(initialScale);
-
-    // build random dude
-    randomDude = new GameObject(GameObject.root(), playerShapes.get(avatarName), playerTextures.get(textureName));
-    initialTranslation = (new Matrix4f()).translation(-10f, 2f, 1f);
-    randomDude.setLocalTranslation(initialTranslation);
-    initialRotation = (new Matrix4f()).rotationY((float) java.lang.Math.toRadians(135.0f));
-    randomDude.setLocalRotation(initialRotation);
-    initialScale = (new Matrix4f()).scaling(0.25f);
-    randomDude.setLocalScale(initialScale);
 
     // build terrain object
     terr = new GameObject(GameObject.root(), terrS, brick);
@@ -250,16 +304,6 @@ public class MyGame extends VariableFrameRateGame {
     avatarP.setSleepThresholds(0.05f, 0.05f); // Low sleep thresholds
     avatar.setPhysicsObject(avatarP);
 
-    // add temporary random dude
-    translation = new Matrix4f(randomDude.getLocalTranslation());
-    tempTransform = toDoubleArray(translation.get(vals));
-    randomDudeP = (engine.getSceneGraph()).addPhysicsCapsuleX(
-        mass, tempTransform, radius, height);
-    randomDudeP.setBounciness(1.0f);
-    randomDudeP.setDamping(0.8f, 0.8f);
-    randomDudeP.setSleepThresholds(0.05f, 0.05f); // Low sleep thresholds
-    randomDude.setPhysicsObject(randomDudeP);
-
     engine.enableGraphicsWorldRender();
     engine.enablePhysicsWorldRender();
 
@@ -320,21 +364,29 @@ public class MyGame extends VariableFrameRateGame {
     setTimes();
     drawHUD();
     setEarParameters();
+    if (animatedShape == true) {
+      AnimatedShape s = (AnimatedShape) avatar.getShape();
+      s.updateAnimation();
+    }
     im.update((float) deltaTime);
     camCtrl.updateCameraPosition();
     setGroundHeightForAvatar();
     updatePhysics();
+    if (foods.size() < 2)
+      placeRandomFood();
+    checkFoodEaten();
     protClient.sendMoveMessage(avatar.getWorldLocation());
     processNetworking((float) elapsedTime);
   }
 
   public void drawHUD() {
-    String dispStr2 = "camera position = "
-        + (cam.getLocation()).x()
-        + ", " + (cam.getLocation()).y()
-        + ", " + (cam.getLocation()).z();
+    String dispStr2 = "Score: " + avatarScore + ", Other Player Score: " + ghostScore;
     Vector3f hud2Color = new Vector3f(1, 1, 1);
-    (engine.getHUDmanager()).setHUD2(dispStr2, hud2Color, 500, 15);
+    (engine.getHUDmanager()).setHUD2(dispStr2, hud2Color, 500, 20);
+  }
+
+  public void updateGhostScore() {
+    ghostScore++;
   }
 
   public void setEarParameters() {
@@ -344,7 +396,7 @@ public class MyGame extends VariableFrameRateGame {
 
   public void setGroundHeightForAvatar() {
     Vector3f loc = avatar.getWorldLocation();
-    float height = terr.getHeight(loc.x(), loc.z()) + 1.2f;
+    float height = terr.getHeight(loc.x(), loc.z());
     Matrix4f currentTransform = new Matrix4f(avatar.getWorldRotation());
     currentTransform.setTranslation(loc.x(), height, loc.z());
     double[] transformArray = toDoubleArray(currentTransform.get(new float[16]));
@@ -371,10 +423,6 @@ public class MyGame extends VariableFrameRateGame {
         mat2.set(3, 1, mat.m31());
         mat2.set(3, 2, mat.m32());
         go.setLocalTranslation(mat2);
-        // set rotation
-        // mat.getRotation(aa);
-        // mat3.rotation(aa);
-        // go.setLocalRotation(mat3);
       }
     }
   }
@@ -435,6 +483,22 @@ public class MyGame extends VariableFrameRateGame {
   // }
   // super.keyPressed(e);
   // }
+
+  @Override
+  public void keyPressed(KeyEvent e) { 
+    AnimatedShape s = (AnimatedShape) avatar.getShape();
+    switch (e.getKeyCode()) { 
+      case KeyEvent.VK_Z:
+        s.stopAnimation();
+        s.playAnimation("WALK", 0.5f, AnimatedShape.EndType.LOOP, 0);
+        break;
+      case KeyEvent.VK_Q:
+        s.stopAnimation();
+        break;
+    }
+
+    super.keyPressed(e);
+  }
 
   // ---------- NETWORKING SECTION ----------------
 

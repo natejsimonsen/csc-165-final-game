@@ -1,4 +1,4 @@
-dolphin/dolphin_red
+squareGuy/squareGuy
 
 Edit the top to change the avatar/texture you want
 
