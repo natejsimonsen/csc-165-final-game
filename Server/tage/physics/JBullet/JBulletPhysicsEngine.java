@@ -15,6 +15,7 @@ import com.bulletphysics.collision.dispatch.CollisionDispatcher;
 import com.bulletphysics.collision.dispatch.DefaultCollisionConfiguration;
 import com.bulletphysics.dynamics.DiscreteDynamicsWorld;
 import com.bulletphysics.dynamics.constraintsolver.SequentialImpulseConstraintSolver;
+import com.bulletphysics.BulletGlobals;
 
 /**
  * This class provides an implementation of the PhysicsEngine interface using the JBullet physics engine.
@@ -54,6 +55,7 @@ public class JBulletPhysicsEngine implements PhysicsEngine {
 		 * <I>does not use the DEFAULT_GRAVITY constants defined in {@link PhysicsEngine}</i>.
 		 */
 		public void initSystem() {
+      BulletGlobals.setDeactivationDisabled(true);
 			// collision configuration contains default setup for memory, collision setup
 			collisionConfiguration = new DefaultCollisionConfiguration();
 

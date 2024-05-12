@@ -1,0 +1,6 @@
+squareGuy/squareGuy
+
+Edit the top to change the avatar/texture you want
+
+Avatars: dolphin, bucket, squareGuy
+Textures: squareGuy, dolphin_normal, dolphin_red, bucket

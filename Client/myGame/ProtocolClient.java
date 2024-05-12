@@ -106,6 +106,8 @@ public class ProtocolClient extends GameConnectionClient {
         // Parse out the id into a UUID
         UUID ghostID = UUID.fromString(messageTokens[1]);
 
+        // System.out.println("moving");
+
         // Parse out the position into a Vector3f
         Vector3f ghostPosition = new Vector3f(
             Float.parseFloat(messageTokens[2]),
@@ -113,6 +115,13 @@ public class ProtocolClient extends GameConnectionClient {
             Float.parseFloat(messageTokens[4]));
 
         ghostManager.updateGhostAvatar(ghostID, ghostPosition);
+      }
+
+      // Handle: update ghost score
+      // Format: ugs
+      if (messageTokens[0].compareTo("ugs") == 0) {
+        game.updateGhostScore();
+        game.playGhostFoodSound();
       }
     }
   }
@@ -195,6 +204,15 @@ public class ProtocolClient extends GameConnectionClient {
       message += "," + position.y();
       message += "," + position.z();
 
+      sendPacket(message);
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+  }
+
+  public void sendUpdateScoreMessage() {
+    try {
+      String message = new String("ugs," + id.toString());
       sendPacket(message);
     } catch (IOException e) {
       e.printStackTrace();
