@@ -6,8 +6,11 @@ import tage.networking.server.GameConnectionServer;
 import tage.networking.server.IClientInfo;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.*;
 
 public class GameServerUDP extends GameConnectionServer<UUID> {
+  private HashMap<UUID, Integer> scores;
+
   public GameServerUDP(int localPort) throws IOException {
     super(localPort, ProtocolType.UDP);
     try {
@@ -17,6 +20,8 @@ public class GameServerUDP extends GameConnectionServer<UUID> {
       System.out.println("Unable to get local IP address");
       e.printStackTrace();
     }
+
+    scores = new HashMap<>();
   }
 
   @Override
@@ -57,10 +62,14 @@ public class GameServerUDP extends GameConnectionServer<UUID> {
         String[] pos = { messageTokens[2], messageTokens[3], messageTokens[4] };
         String avatarName = "";
         String textureName = "";
-        if (messageTokens.length > 5)
+        if (messageTokens.length > 5) {
           avatarName = messageTokens[5];
-        if (messageTokens.length > 6)
+          System.out.println("Avatar is " + avatarName);
+        }
+        if (messageTokens.length > 6) {
           textureName = messageTokens[6];
+          System.out.println("Texture is " + textureName);
+        }
 
         sendCreateMessages(clientID, pos, avatarName, textureName);
         sendWantsDetailsMessages(clientID);
@@ -72,7 +81,9 @@ public class GameServerUDP extends GameConnectionServer<UUID> {
         UUID clientID = UUID.fromString(messageTokens[1]);
         UUID remoteID = UUID.fromString(messageTokens[2]);
         String[] pos = { messageTokens[3], messageTokens[4], messageTokens[5] };
-        sendDetailsForMessage(clientID, remoteID, pos);
+        String avatarName = messageTokens[6];
+        String textureName = messageTokens[7];
+        sendDetailsForMessage(clientID, remoteID, pos, avatarName, textureName);
       }
 
       // MOVE --- Case where server receives a move message
@@ -81,6 +92,13 @@ public class GameServerUDP extends GameConnectionServer<UUID> {
         UUID clientID = UUID.fromString(messageTokens[1]);
         String[] pos = { messageTokens[2], messageTokens[3], messageTokens[4] };
         sendMoveMessages(clientID, pos);
+      }
+
+      // UGS --- Case where server receives an update ghost score message
+      // Received Message Format: (ugs,localId)
+      if (messageTokens[0].compareTo("ugs") == 0) {
+        UUID clientID = UUID.fromString(messageTokens[1]);
+        sendUpdateGhostScoreMessage(clientID);
       }
     }
   }
@@ -93,8 +111,10 @@ public class GameServerUDP extends GameConnectionServer<UUID> {
     try {
       System.out.println("trying to confirm join");
       String message = new String("join,");
-      if (success)
+      if (success) {
         message += "success";
+        scores.put(clientID, 0);
+      }
       else
         message += "failure";
       sendPacket(message, clientID);
@@ -157,12 +177,14 @@ public class GameServerUDP extends GameConnectionServer<UUID> {
   // Message Format: (dsfr,remoteId,x,y,z) where x, y, and z represent the
   // position.
 
-  public void sendDetailsForMessage(UUID clientID, UUID remoteId, String[] position) {
+  public void sendDetailsForMessage(UUID clientID, UUID remoteId, String[] position, String avatarName, String textureName) {
     try {
       String message = new String("dsfr," + remoteId.toString());
       message += "," + position[0];
       message += "," + position[1];
       message += "," + position[2];
+      message += "," + avatarName;
+      message += "," + textureName;
       sendPacket(message, clientID);
     } catch (IOException e) {
       e.printStackTrace();
@@ -200,6 +222,18 @@ public class GameServerUDP extends GameConnectionServer<UUID> {
       message += "," + position[0];
       message += "," + position[1];
       message += "," + position[2];
+      forwardPacketToAll(message, clientID);
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+  }
+
+  public void sendUpdateGhostScoreMessage(UUID clientID) {
+    int score = scores.get(clientID);
+    scores.put(clientID, score++);
+    System.out.println(clientID.toString() + ", new score = " + scores.get(clientID));
+    try {
+      String message = new String("ugs," + clientID.toString());
       forwardPacketToAll(message, clientID);
     } catch (IOException e) {
       e.printStackTrace();

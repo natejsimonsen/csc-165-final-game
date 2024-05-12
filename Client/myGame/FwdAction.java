@@ -25,10 +25,10 @@ public class FwdAction extends AbstractInputAction {
     float speed = 10f * time;
     if (e.getComponent().getIdentifier().equals(net.java.games.input.Component.Identifier.Key.S))
       speed *= -1;
-    if (e.getComponent().getIdentifier().equals(net.java.games.input.Component.Identifier.Axis.X)) {
+    if (e.getComponent().getIdentifier().equals(net.java.games.input.Component.Identifier.Axis.Y)) {
       float val = e.getValue();
-      float deadzone = 0.2f;
-      if (val < deadzone && val > deadzone)
+      float deadzone = 0.3f;
+      if (val > -deadzone && val < deadzone)
         return;
 
       if (val > 0)

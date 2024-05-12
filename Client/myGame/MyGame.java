@@ -40,6 +40,7 @@ public class MyGame extends VariableFrameRateGame {
   private PhysicsEngine physicsEngine;
   private boolean animatedShape = false;
   private boolean lightEnabled = false;
+  private boolean animationEnabled = false;
 
   private int counter = 0;
   private int avatarScore = 0;
@@ -296,10 +297,19 @@ public class MyGame extends VariableFrameRateGame {
     lightEnabled = !lightEnabled;
   }
 
+  public boolean getAnimationEnabled() {
+    return animationEnabled;
+  }
+
+  public void toggleAnimation() {
+    animationEnabled = !animationEnabled;
+  }
+
   private void setActions() {
     FwdAction fwdAction = new FwdAction(this);
     TurnAction turnAction = new TurnAction(this);
     ToggleLightAction toggleLightAction = new ToggleLightAction(this);
+    ToggleAnimationAction toggleAnimationAction = new ToggleAnimationAction(this);
 
     im.associateActionWithAllKeyboards(
         net.java.games.input.Component.Identifier.Key.W,
@@ -325,8 +335,15 @@ public class MyGame extends VariableFrameRateGame {
       net.java.games.input.Component.Identifier.Key.L,
       toggleLightAction, InputManager.INPUT_ACTION_TYPE.ON_PRESS_ONLY);
     im.associateActionWithAllGamepads(
-        net.java.games.input.Component.Identifier.Button._1,
+        net.java.games.input.Component.Identifier.Button._3,
         toggleLightAction, InputManager.INPUT_ACTION_TYPE.ON_PRESS_ONLY);
+
+    im.associateActionWithAllGamepads(
+        net.java.games.input.Component.Identifier.Button._4,
+        toggleAnimationAction, InputManager.INPUT_ACTION_TYPE.ON_PRESS_ONLY);
+    im.associateActionWithAllKeyboards(
+        net.java.games.input.Component.Identifier.Key.P,
+        toggleAnimationAction, InputManager.INPUT_ACTION_TYPE.ON_PRESS_ONLY);
   }
 
   private void setupPhysicsObjects() {
@@ -511,6 +528,10 @@ public class MyGame extends VariableFrameRateGame {
     System.exit(0);
   }
 
+  public boolean getAnimatedShape() {
+    return animatedShape;
+  }
+
   @Override
   public void keyPressed(KeyEvent e) {
     switch (e.getKeyCode()) {
@@ -518,20 +539,6 @@ public class MyGame extends VariableFrameRateGame {
         exit();
         break;
     }
-
-    if (animatedShape == false)
-      return;
-    AnimatedShape s = (AnimatedShape) avatar.getShape();
-    switch (e.getKeyCode()) {
-      case KeyEvent.VK_Z:
-        s.stopAnimation();
-        s.playAnimation("WALK", 0.5f, AnimatedShape.EndType.LOOP, 0);
-        break;
-      case KeyEvent.VK_Q:
-        s.stopAnimation();
-        break;
-    }
-
     super.keyPressed(e);
   }
 
